@@ -63,8 +63,8 @@ export function CheckoutDeliveryCard({
                                 type="button"
                                 onClick={() => onSelectDate(opt.value)}
                                 className={`inline-flex h-11 items-center gap-2 rounded-xl px-4 text-xs sm:text-sm font-bold transition ${isActive
-                                        ? 'bg-[#1E462D] text-white shadow-2xs'
-                                        : 'bg-[#EFF3FA] text-gray-700 hover:bg-gray-200/70'
+                                    ? 'bg-[#1E462D] text-white shadow-2xs'
+                                    : 'bg-[#EFF3FA] text-gray-700 hover:bg-gray-200/70'
                                     }`}
                             >
                                 <Calendar className="h-4 w-4 shrink-0" />
@@ -88,9 +88,9 @@ export function CheckoutDeliveryCard({
                                 key={slot.value}
                                 type="button"
                                 onClick={() => onSelectSlot(slot.value)}
-                                className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition min-h-[72px] ${isActive
-                                        ? 'border-[#1E462D]/40 bg-[#DDF2E2]/55'
-                                        : 'border-transparent bg-[#EFF3FA] hover:bg-gray-200/60'
+                                className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition min-h-18 ${isActive
+                                    ? 'border-[#1E462D]/40 bg-[#DDF2E2]/55'
+                                    : 'border-transparent bg-[#EFF3FA] hover:bg-gray-200/60'
                                     }`}
                             >
                                 <span

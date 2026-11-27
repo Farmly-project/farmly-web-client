@@ -28,8 +28,21 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
         );
     }
 
-    const normalizedRole = user.role?.toUpperCase() as UserRole;
-    if (allowedRoles && !allowedRoles.includes(normalizedRole)) {
+    const normalizedRole = user.role?.trim().toUpperCase() as UserRole | undefined;
+    const normalizedAllowed = allowedRoles?.map(
+        (r) => r.trim().toUpperCase() as UserRole
+    );
+
+    if (normalizedAllowed && (!normalizedRole || !normalizedAllowed.includes(normalizedRole))) {
+        if (normalizedRole === 'sales') {
+            return <Navigate to="/sales/orders" replace />;
+        }
+        if (normalizedRole === 'farm_staff') {
+            return <Navigate to="/farm/batches" replace />;
+        }
+        if (normalizedRole === 'admin') {
+            return <Navigate to="/admin/dashboard" replace />;
+        }
         return <Navigate to="/" replace />;
     }
 

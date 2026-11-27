@@ -62,7 +62,7 @@ export function SubscriptionScheduleForm({
                                 key={day.key}
                                 type="button"
                                 onClick={() => onToggleWeekday(day.key)}
-                                className={`min-h-[44px] rounded-xl text-xs font-bold border transition ${active
+                                className={`min-h-11 rounded-xl text-xs font-bold border transition ${active
                                     ? 'bg-[#1E462D] text-white border-[#1E462D]'
                                     : 'bg-[#F8FAF8] text-gray-700 border-gray-200 hover:border-emerald-400'
                                     }`}

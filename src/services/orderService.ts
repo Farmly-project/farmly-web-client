@@ -23,13 +23,13 @@ export function clearGuestToken(): void {
 }
 
 export const orderService = {
-    // API #34: GET /api/v1/cart (lấy giỏ theo account JWT hoặc guest_token)
+    // API #34: GET /api/v1/cart (lấy giỏ theo account JWT hoặc guest_token)[cite: 4, 7]
     getCart: (isAuthenticated: boolean) =>
         apiFetch<unknown>('/cart', {
             params: isAuthenticated ? undefined : { guest_token: getOrCreateGuestToken() },
         }),
 
-    // API #35: POST /api/v1/cart/items
+    // API #35: POST /api/v1/cart/items[cite: 4, 7]
     addCartItem: (productId: number, quantity: number, isAuthenticated: boolean) =>
         apiFetch<unknown>('/cart/items', {
             method: 'POST',
@@ -40,7 +40,7 @@ export const orderService = {
             }),
         }),
 
-    // API #36: PUT /api/v1/cart/items/:itemId
+    // API #36: PUT /api/v1/cart/items/:itemId[cite: 4, 7]
     updateCartItem: (itemId: string, quantity: number, isAuthenticated: boolean) =>
         apiFetch<unknown>(`/cart/items/${itemId}`, {
             method: 'PUT',
@@ -50,11 +50,34 @@ export const orderService = {
             }),
         }),
 
-    // API #37: DELETE /api/v1/cart/items/:itemId
+    // API #37: DELETE /api/v1/cart/items/:itemId[cite: 4, 7]
     deleteCartItem: (itemId: string, isAuthenticated: boolean) =>
         apiFetch<unknown>(`/cart/items/${itemId}`, {
             method: 'DELETE',
             params: isAuthenticated ? undefined : { guest_token: getOrCreateGuestToken() },
+        }),
+
+    // API #42: GET /api/v1/orders (Danh sách đơn hàng cho Sales / Admin)[cite: 7]
+    getOrders: (params?: { status?: string; page?: number; limit?: number }) =>
+        apiFetch<unknown>('/orders', { params }),
+
+    // API #44: POST /api/v1/orders/:id/confirm (Sales duyệt đơn & trừ kho FEFO)[cite: 7]
+    confirmOrder: (orderId: number | string) =>
+        apiFetch<unknown>(`/orders/${orderId}/confirm`, {
+            method: 'POST',
+        }),
+
+    // API #45: PATCH /api/v1/orders/:id/status (Cập nhật trạng thái giao hàng)[cite: 7]
+    updateOrderStatus: (
+        orderId: number | string,
+        payload: {
+            status: 'confirmed' | 'preparing' | 'shipping' | 'delivered' | 'cancelled';
+            note?: string;
+        }
+    ) =>
+        apiFetch<unknown>(`/orders/${orderId}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
         }),
 };
 export const checkoutOrderService = {

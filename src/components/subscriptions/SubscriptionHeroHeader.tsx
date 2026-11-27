@@ -36,9 +36,9 @@ export function SubscriptionHeroHeader({
                         <button
                             type="button"
                             onClick={onSelectBuilder}
-                            className={`min-h-[44px] rounded-xl px-4 text-xs sm:text-sm font-bold transition ${activeTab === 'builder'
-                                    ? 'bg-[#DDF2E2] text-[#1B4332]'
-                                    : 'text-emerald-100 hover:text-white'
+                            className={`min-h-11 rounded-xl px-4 text-xs sm:text-sm font-bold transition ${activeTab === 'builder'
+                                ? 'bg-[#DDF2E2] text-[#1B4332]'
+                                : 'text-emerald-100 hover:text-white'
                                 }`}
                         >
                             + Đăng ký gói mới
@@ -47,9 +47,9 @@ export function SubscriptionHeroHeader({
                         <button
                             type="button"
                             onClick={onSelectMyList}
-                            className={`min-h-[44px] rounded-xl px-4 text-xs sm:text-sm font-bold transition flex items-center gap-1.5 ${activeTab === 'my-list'
-                                    ? 'bg-[#DDF2E2] text-[#1B4332]'
-                                    : 'text-emerald-100 hover:text-white'
+                            className={`min-h-11 rounded-xl px-4 text-xs sm:text-sm font-bold transition flex items-center gap-1.5 ${activeTab === 'my-list'
+                                ? 'bg-[#DDF2E2] text-[#1B4332]'
+                                : 'text-emerald-100 hover:text-white'
                                 }`}
                         >
                             <span>Gói của tôi</span>

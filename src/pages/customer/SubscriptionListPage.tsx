@@ -179,6 +179,35 @@ export function SubscriptionListPage() {
         });
     };
 
+    const getPayOSCheckoutUrl = (res: unknown): string | null => {
+        if (!res || typeof res !== 'object') return null;
+        const r = res as Record<string, unknown>;
+        const d1 =
+            r.data && typeof r.data === 'object'
+                ? (r.data as Record<string, unknown>)
+                : r;
+        const d2 =
+            d1.data && typeof d1.data === 'object'
+                ? (d1.data as Record<string, unknown>)
+                : d1;
+
+        const url =
+            d2.checkoutUrl ??
+            d2.checkout_url ??
+            d2.paymentUrl ??
+            d2.payment_url ??
+            d1.checkoutUrl ??
+            d1.checkout_url ??
+            d1.paymentUrl ??
+            d1.payment_url ??
+            r.checkoutUrl ??
+            r.checkout_url ??
+            r.paymentUrl ??
+            r.payment_url;
+
+        return typeof url === 'string' && url.length > 0 ? url : null;
+    };
+
     const handleCreateSubscription = async (e: React.FormEvent) => {
         e.preventDefault();
         setFormError(null);
@@ -211,7 +240,7 @@ export function SubscriptionListPage() {
                 .map((key) => WEEKDAY_OPTIONS.find((w) => w.key === key)?.code)
                 .filter((code): code is number => typeof code === 'number');
 
-            const res = await subscriptionService.createSubscription({
+            const subRes = await subscriptionService.createSubscription({
                 shipping_address: shippingAddress.trim(),
                 delivery_days: deliveryDayNumbers,
                 delivery_slot: deliverySlot,
@@ -222,69 +251,54 @@ export function SubscriptionListPage() {
                 })),
             });
 
-            const raw = res as unknown as Record<string, unknown>;
-            const dataObj =
-                raw?.data && typeof raw.data === 'object'
-                    ? (raw.data as Record<string, unknown>)
-                    : raw;
-            const subObj =
-                dataObj?.subscription && typeof dataObj.subscription === 'object'
-                    ? (dataObj.subscription as Record<string, unknown>)
-                    : undefined;
-
-            // 1. Nếu API tạo gói trả sẵn checkout_url / payment_url thì chuyển hướng luôn
-            const directCheckoutUrl =
-                (raw?.checkout_url as string | undefined) ||
-                (raw?.payment_url as string | undefined) ||
-                (dataObj?.checkout_url as string | undefined) ||
-                (dataObj?.payment_url as string | undefined);
-
-            if (directCheckoutUrl) {
-                window.location.href = directCheckoutUrl;
+            // 1. Nếu API tạo gói trả sẵn link thanh toán (giống Checkout khi có sẵn link)
+            const directUrl = getPayOSCheckoutUrl(subRes);
+            if (directUrl) {
+                window.location.href = directUrl;
                 return;
             }
 
-            // 2. Nếu chưa có link, lấy subscription_id và gọi POST /api/v1/payments (API #47) để tạo link PayOS
+            // 2. Lấy subscription_id giống cách Checkout lấy order_id rồi gọi createPayOSPayment
+            const raw = (subRes ?? {}) as Record<string, unknown>;
+            const dataObj =
+                raw.data && typeof raw.data === 'object'
+                    ? (raw.data as Record<string, unknown>)
+                    : raw;
+            const subObj =
+                dataObj.subscription && typeof dataObj.subscription === 'object'
+                    ? (dataObj.subscription as Record<string, unknown>)
+                    : undefined;
+
             const subscriptionId = Number(
-                dataObj?.id ?? dataObj?.subscription_id ?? subObj?.id ?? 0
+                dataObj.id ?? dataObj.subscription_id ?? subObj?.id ?? 0
             );
 
-            if (subscriptionId > 0) {
-                const origin = window.location.origin;
-                const paymentRes = await paymentService.createPayOSPayment({
-                    subscription_id: subscriptionId,
-                    return_url: `${origin}/payment/result?type=subscription&subscription_id=${subscriptionId}`,
-                    cancel_url: `${origin}/subscriptions?payment=cancelled`,
-                });
-
-                const payRaw = paymentRes as unknown as Record<string, unknown>;
-                const payData =
-                    payRaw?.data && typeof payRaw.data === 'object'
-                        ? (payRaw.data as Record<string, unknown>)
-                        : payRaw;
-
-                const payosUrl =
-                    (payData?.checkout_url as string | undefined) ||
-                    (payData?.payment_url as string | undefined) ||
-                    (payRaw?.checkout_url as string | undefined) ||
-                    (payRaw?.payment_url as string | undefined);
-
-                if (payosUrl) {
-                    window.location.href = payosUrl;
-                    return;
-                }
+            if (!subscriptionId) {
+                throw new Error('Không tìm thấy mã gói định kỳ sau khi tạo.');
             }
 
-            setSuccessBanner(
-                'Đăng ký gói nông sản định kỳ thành công! Hệ thống sẽ tự động lên đơn lúc 00:00 trước mỗi ngày giao.'
-            );
-            await loadMySubscriptions();
-            setActiveTab('my-list');
+            const origin = window.location.origin;
+            const paymentRes = await paymentService.createPayOSPayment({
+                subscription_id: subscriptionId,
+                amount: totalPackageAmount,
+                description: `Goi dinh ky #${subscriptionId}`,
+                return_url: `${origin}/payment/result?type=subscription&subscription_id=${subscriptionId}`,
+                cancel_url: `${origin}/subscriptions?payment=cancelled`,
+            });
+
+            const payosUrl = getPayOSCheckoutUrl(paymentRes);
+            if (!payosUrl) {
+                throw new Error('Không nhận được đường dẫn thanh toán PayOS.');
+            }
+
+            window.location.href = payosUrl;
         } catch (err) {
             setFormError(
                 err instanceof ApiError
                     ? err.message
-                    : 'Không thể khởi tạo thanh toán PayOS cho gói định kỳ. Vui lòng thử lại.'
+                    : err instanceof Error
+                        ? err.message
+                        : 'Không thể khởi tạo thanh toán PayOS. Vui lòng thử lại.'
             );
         } finally {
             setIsSubmitting(false);
