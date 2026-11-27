@@ -14,6 +14,7 @@ import OrderListPage from './pages/customer/OrderListPage'
 import OrderDetailPage from './pages/customer/OrderDetailPage'
 import PaymentResultPage from './pages/customer/PaymentResultPage'
 import TraceabilityPage from './pages/public/TraceabilityPage'
+import SubscriptionListPage from './pages/customer/SubscriptionListPage'
 
 function App() {
 
@@ -30,7 +31,7 @@ function App() {
           <Route path="/cart" element={<CartPage />} />
           <Route path="/trace" element={<TraceabilityPage />} />
           <Route path="/trace/:batchCode" element={<TraceabilityPage />} />
-
+          <Route path="subscriptions" element={<SubscriptionListPage />} />
 
           <Route element={<ProtectedRoute allowedRoles={['CUSTOMER']} />}>
             <Route path="/profile" element={<ProfilePage />} />
