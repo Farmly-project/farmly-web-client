@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+    --farmly-bg-cream: #FDF0D5;
+    /* Nền vàng kem ấm của Top Announcement Bar */
+    --farmly-bg-mint: #E6F8E7;
+    /* Nền xanh bạc hà của Header chính & Footer */
+    --farmly-green-dark: #1E4620;
+    /* Xanh lá đậm (Logo, nút active, icon) */
+    --farmly-green-dot: #2E6F24;
+    /* Chấm tròn xanh lá */
+    --farmly-brown-badge: #5C3317;
+    /* Nền nâu đậm badge giỏ hàng */
+    --farmly-border-soft: #C7DEC8;
+    /* Viền nhạt thanh menu, ô tìm kiếm */
+}
+
+.bg-farmly-cream {
+    background-color: var(--farmly-bg-cream);
+}
+
+.bg-farmly-mint {
+    background-color: var(--farmly-bg-mint);
+}
+
+.bg-farmly-dark {
+    background-color: var(--farmly-green-dark);
+}
+
+.text-farmly-dark {
+    color: var(--farmly-green-dark);
+}
+
+.bg-farmly-dot {
+    background-color: var(--farmly-green-dot);
+}
+
+.bg-farmly-badge {
+    background-color: var(--farmly-brown-badge);
+}
+
+.border-farmly-soft {
+    border-color: var(--farmly-border-soft);
+}
