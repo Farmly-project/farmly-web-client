@@ -68,11 +68,11 @@ export function Header() {
     };
 
     const profileDestination =
-        user?.role === 'ADMIN'
+        user?.role === 'admin'
             ? '/admin/dashboard'
-            : user?.role === 'FARM_STAFF'
+            : user?.role === 'farm_staff'
                 ? '/farm/batches'
-                : user?.role === 'SALES'
+                : user?.role === 'sales'
                     ? '/sales/orders'
                     : '/profile';
 

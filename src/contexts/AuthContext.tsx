@@ -6,7 +6,7 @@ import {
     type ReactNode,
 } from 'react';
 
-export type UserRole = 'CUSTOMER' | 'FARM_STAFF' | 'SALES' | 'ADMIN';
+export type UserRole = 'customer' | 'farm_staff' | 'sales' | 'admin';
 
 export interface AuthUser {
     id: string;

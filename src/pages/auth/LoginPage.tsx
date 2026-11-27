@@ -13,10 +13,10 @@ const LOCK_STORAGE_KEY = 'farmly_login_lock_until';
 const ATTEMPTS_STORAGE_KEY = 'farmly_login_failed_attempts';
 
 const ROLE_REDIRECT_MAP: Record<UserRole, string> = {
-    CUSTOMER: '/',
-    FARM_STAFF: '/farm/batches',
-    SALES: '/sales/orders',
-    ADMIN: '/admin/dashboard',
+    customer: '/',
+    farm_staff: '/farm/batches',
+    sales: '/sales/orders',
+    admin: '/admin/dashboard',
 };
 
 export function LoginPage() {
@@ -64,7 +64,7 @@ export function LoginPage() {
         new Date(ts).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
     const handleLoginSubmit = async (values: LoginFormValues) => {
-        if (lockUntil && lockUntil > Date.now()) return;
+        // if (lockUntil && lockUntil > Date.now()) return;
         setServerError(null);
 
         try {
@@ -146,7 +146,7 @@ export function LoginPage() {
             );
 
             const role = userData?.role as UserRole;
-            if (returnTo && role === 'CUSTOMER') {
+            if (returnTo && role === 'customer') {
                 navigate(returnTo, { replace: true });
             } else {
                 navigate(ROLE_REDIRECT_MAP[role] || '/', { replace: true });
@@ -179,7 +179,7 @@ export function LoginPage() {
                 isLocked={isLocked}
                 remainingSeconds={remainingSeconds}
             />
-            <LoginForm isLocked={isLocked} onSubmitForm={handleLoginSubmit} />
+            <LoginForm isLocked={false} onSubmitForm={handleLoginSubmit} />
         </AuthLayout>
     );
 }
