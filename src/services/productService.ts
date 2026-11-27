@@ -24,6 +24,7 @@ export const productService = {
                 category_id: params.category_id,
                 allow_subscription: params.allow_subscription,
                 flash_sale_only: params.flash_sale_only,
+                near_expiry: params.near_expiry,
                 in_stock_only: params.in_stock_only,
                 certification: params.certification,
                 min_price: params.min_price,

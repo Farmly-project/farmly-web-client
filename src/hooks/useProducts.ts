@@ -3,6 +3,7 @@ import { productService } from '../services/productService';
 import type {
     CategoryItem,
     PaginatedProductResponse,
+    ProductCardItem,
     ProductListQueryParams,
 } from '../types/product.types';
 
@@ -11,44 +12,39 @@ export function useCategories() {
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isError, setIsError] = useState<boolean>(false);
 
-    useEffect(() => {
-        let isMounted = true;
+    const fetchCategories = useCallback(async () => {
         setIsLoading(true);
-
-        productService
-            .getCategories()
-            .then((res) => {
-                if (!isMounted) return;
-                const list = Array.isArray(res)
-                    ? res
-                    : ((res as { data?: CategoryItem[] })?.data ?? []);
-                setData(list);
-                setIsError(false);
-            })
-            .catch(() => {
-                if (isMounted) setIsError(true);
-            })
-            .finally(() => {
-                if (isMounted) setIsLoading(false);
-            });
-
-        return () => {
-            isMounted = false;
-        };
+        setIsError(false);
+        try {
+            const res = await productService.getCategories();
+            const list = Array.isArray(res)
+                ? res
+                : ((res as { data?: CategoryItem[]; items?: CategoryItem[] })?.items ??
+                    (res as { data?: CategoryItem[] })?.data ??
+                    []);
+            setData(list);
+        } catch {
+            setIsError(true);
+        } finally {
+            setIsLoading(false);
+        }
     }, []);
 
-    return { data, isLoading, isError };
+    useEffect(() => {
+        fetchCategories();
+    }, [fetchCategories]);
+
+    return { data, isLoading, isError, refetch: fetchCategories };
 }
 
 export function useProducts(params: ProductListQueryParams = {}) {
     const [data, setData] = useState<PaginatedProductResponse>({
-        data: [],
+        items: [],
         pagination: { page: 1, limit: 20, total: 0, total_pages: 1 },
     });
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isError, setIsError] = useState<boolean>(false);
 
-    // Chuyển params thành chuỗi để useEffect chỉ chạy lại khi tham số lọc thực sự đổi
     const paramsKey = JSON.stringify(params);
 
     const fetchProducts = useCallback(async () => {
@@ -60,27 +56,37 @@ export function useProducts(params: ProductListQueryParams = {}) {
 
             if (Array.isArray(res)) {
                 setData({
-                    data: res,
+                    items: res,
                     pagination: {
                         page: parsedParams.page ?? 1,
                         limit: parsedParams.limit ?? 20,
                         total: res.length,
-                        total_pages: 1,
+                        total_pages: Math.max(1, Math.ceil(res.length / (parsedParams.limit ?? 20))),
                     },
                 });
             } else {
+                const rawAny = res as unknown as {
+                    items?: ProductCardItem[];
+                    data?: ProductCardItem[];
+                    pagination?: PaginatedProductResponse['pagination'];
+                };
+                const list = rawAny.items ?? rawAny.data ?? [];
                 setData({
-                    data: res?.data ?? [],
-                    pagination: res?.pagination ?? {
+                    items: list,
+                    pagination: rawAny.pagination ?? {
                         page: parsedParams.page ?? 1,
                         limit: parsedParams.limit ?? 20,
-                        total: res?.data?.length ?? 0,
-                        totalPages: 1,
+                        total: list.length,
+                        total_pages: 1,
                     },
                 });
             }
         } catch {
             setIsError(true);
+            setData({
+                items: [],
+                pagination: { page: 1, limit: 20, total: 0, total_pages: 1 },
+            });
         } finally {
             setIsLoading(false);
         }

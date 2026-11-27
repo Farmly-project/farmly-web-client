@@ -3,9 +3,9 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthLayout } from '../../layouts/AuthLayout';
 import { AuthAlertBanner } from '../../components/auth/AuthAlertBanner';
 import { LoginForm } from '../../components/auth/LoginForm';
+import { useAuth } from '../../hooks/useAuth';
 import type { LoginFormValues } from '../../utils/validators';
-
-type UserRole = 'CUSTOMER' | 'FARM_STAFF' | 'SALES' | 'ADMIN';
+import type { UserRole } from '../../contexts/AuthContext';
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
@@ -22,6 +22,7 @@ const ROLE_REDIRECT_MAP: Record<UserRole, string> = {
 export function LoginPage() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { login, isAuthenticated, user } = useAuth();
     const returnTo = (location.state as { from?: string } | null)?.from;
 
     const [serverError, setServerError] = useState<string | null>(null);
@@ -30,6 +31,13 @@ export function LoginPage() {
         return saved && Number(saved) > Date.now() ? Number(saved) : null;
     });
     const [remainingSeconds, setRemainingSeconds] = useState(0);
+
+    // Tự động chuyển hướng nếu người dùng đã đăng nhập sẵn
+    useEffect(() => {
+        if (isAuthenticated && user) {
+            navigate(ROLE_REDIRECT_MAP[user.role] || '/', { replace: true });
+        }
+    }, [isAuthenticated, user, navigate]);
 
     useEffect(() => {
         if (!lockUntil) {
@@ -60,28 +68,40 @@ export function LoginPage() {
         setServerError(null);
 
         try {
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
-            const cleanedIdentifier = values.identifier.includes('@')
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+            const isEmail = values.identifier.includes('@');
+            const cleanedValue = isEmail
                 ? values.identifier.trim().toLowerCase()
                 : values.identifier.replace(/\s+/g, '');
+
+            // Gửi đúng key 'email' theo yêu cầu của Zod Validator ở Backend
+            const payload = isEmail
+                ? { email: cleanedValue, password: values.password }
+                : { phone: cleanedValue, password: values.password };
 
             const res = await fetch(`${apiUrl}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    identifier: cleanedIdentifier,
-                    password: values.password,
-                    remember_me: values.rememberMe,
-                }),
+                body: JSON.stringify(payload),
             });
 
             const data = await res.json().catch(() => ({}));
 
             if (!res.ok) {
+                // Lỗi 400 từ Zod Validator
+                if (res.status === 400) {
+                    const firstErr = Array.isArray(data?.errors) ? data.errors[0]?.message : null;
+                    setServerError(firstErr || data?.message || 'Dữ liệu đầu vào không hợp lệ');
+                    return;
+                }
+
+                // Tài khoản bị Admin khóa (UC09 - E4)
                 if (res.status === 403 || data?.code === 'ACCOUNT_DISABLED') {
                     setServerError('Tài khoản đã bị khoá, vui lòng liên hệ quản trị viên');
                     return;
                 }
+
+                // Bị khóa tạm thời 15 phút (UC09 - E3 / NFR-S05)
                 if (res.status === 429 || data?.locked_until) {
                     const unlockAt = data?.locked_until
                         ? new Date(data.locked_until).getTime()
@@ -92,6 +112,7 @@ export function LoginPage() {
                     return;
                 }
 
+                // Sai email hoặc mật khẩu (401 - UC09 - E2)
                 const attempts = Number(localStorage.getItem(ATTEMPTS_STORAGE_KEY) || '0') + 1;
                 if (attempts >= MAX_FAILED_ATTEMPTS) {
                     const unlockAt = Date.now() + LOCK_DURATION_MS;
@@ -114,15 +135,17 @@ export function LoginPage() {
             localStorage.removeItem(LOCK_STORAGE_KEY);
 
             const authData = data.data || data;
-            const storage = values.rememberMe ? localStorage : sessionStorage;
-            storage.setItem('access_token', authData.access_token);
-            if (authData.refresh_token) storage.setItem('refresh_token', authData.refresh_token);
-            if (authData.user?.role) {
-                localStorage.setItem('user_role', authData.user.role);
-                localStorage.setItem('user_info', JSON.stringify(authData.user));
-            }
+            const userData = authData.user;
 
-            const role = authData.user?.role as UserRole;
+            // Lưu phiên vào AuthContext (tự động cập nhật Header & gộp CartContext)
+            login(
+                authData.access_token,
+                userData,
+                values.rememberMe,
+                authData.refresh_token
+            );
+
+            const role = userData?.role as UserRole;
             if (returnTo && role === 'CUSTOMER') {
                 navigate(returnTo, { replace: true });
             } else {

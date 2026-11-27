@@ -1,70 +1,83 @@
-import React, { useState, useEffect } from "react";
-import { NavLink, Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
-import { Search, ShoppingBasket, User, Menu, X, LogIn } from "lucide-react";
-import "../../../public/Css/Header.css";
-
-interface HeaderProps {
-    cartCount?: number;
-}
-
-const navItems = [
-    { label: "Trang chủ", path: "/", exact: true },
-    { label: "Tất cả sản phẩm", path: "/products", exact: false },
-    { label: "Gói định kỳ", path: "/subscriptions", exact: false },
-    { label: "Flash Sale", path: "/products?flash_sale_only=true", exact: false },
-    { label: "Truy xuất QR", path: "/trace", exact: false },
+import { useState, type FormEvent } from 'react';
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import {
+    Search,
+    ShoppingBasket,
+    User,
+    Menu,
+    X,
+    LogOut,
+    Package,
+    CalendarSync,
+    QrCode,
+} from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
+import { useCart } from '../../hooks/useCart';
+import '../../../public/Css/Header.css'
+const NAV_ITEMS = [
+    { label: 'Trang chủ', path: '/' },
+    { label: 'Tất cả sản phẩm', path: '/products' },
+    { label: 'Gói định kỳ', path: '/subscriptions' },
+    { label: 'Flash Sale', path: '/products?flash_sale_only=true' },
+    { label: 'Truy xuất QR', path: '/trace/BATCH-20261127-RAU01' },
 ];
 
-export default function Header({ cartCount = 0 }: HeaderProps) {
+export function Header() {
     const navigate = useNavigate();
     const location = useLocation();
-    const [searchParams] = useSearchParams();
+    const { isAuthenticated, user, logout } = useAuth();
+    const { items } = useCart();
 
-    const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
+    const [searchQuery, setSearchQuery] = useState('');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
-    const isAuthenticated = Boolean(localStorage.getItem("access_token"));
-    const isFlashSaleActive =
-        location.pathname === "/products" && searchParams.get("flash_sale_only") === "true";
+    const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
+    const isFlashSaleRoute =
+        location.pathname === '/products' &&
+        new URLSearchParams(location.search).get('flash_sale_only') === 'true';
 
-    // Đồng bộ ô tìm kiếm trên Header khi từ khóa trên URL thay đổi
-    useEffect(() => {
-        setSearchQuery(searchParams.get("search") || "");
-    }, [searchParams]);
-
-    // Xử lý tìm kiếm theo đặc tả UC07 (bước 3-4 & ngoại lệ E2)
-    const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleSearch = (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const trimmed = searchQuery.trim();
+        if (trimmed.length > 100) return;
 
-        if (trimmed.length > 100 || (trimmed.length > 0 && /^[^a-zA-Z0-9\u00C0-\u1EF9]+$/.test(trimmed))) {
-            return;
-        }
-
+        navigate(
+            trimmed
+                ? `/products?search=${encodeURIComponent(trimmed)}`
+                : '/products'
+        );
         setIsMobileMenuOpen(false);
         setIsMobileSearchOpen(false);
-
-        if (trimmed) {
-            navigate(`/products?search=${encodeURIComponent(trimmed)}`);
-        } else {
-            navigate("/products");
-        }
     };
 
-    // Kiểm tra trạng thái active chính xác cho từng mục menu
-    const checkNavActive = (itemPath: string, isRouterActive: boolean) => {
-        if (itemPath === "/products?flash_sale_only=true") {
-            return isFlashSaleActive;
-        }
-        if (itemPath === "/products") {
-            return location.pathname.startsWith("/products") && !isFlashSaleActive;
-        }
-        return isRouterActive;
+    const handleLogout = async () => {
+        await logout();
+        setIsMobileMenuOpen(false);
+        navigate('/', { replace: true });
     };
+
+    const checkItemActive = (path: string, routerIsActive: boolean) => {
+        if (path === '/products?flash_sale_only=true') {
+            return isFlashSaleRoute;
+        }
+        if (path === '/products') {
+            return routerIsActive && !isFlashSaleRoute;
+        }
+        return routerIsActive;
+    };
+
+    const profileDestination =
+        user?.role === 'ADMIN'
+            ? '/admin/dashboard'
+            : user?.role === 'FARM_STAFF'
+                ? '/farm/batches'
+                : user?.role === 'SALES'
+                    ? '/sales/orders'
+                    : '/profile';
 
     return (
-        <header className="w-full bg-farmly-mint border-b border-farmly-soft sticky top-0 z-50">
+        <header className="sticky top-0 z-50 w-full border-b border-emerald-900/10 bg-[#F3F8F3]/95 backdrop-blur-xs">
             {/* Top Announcement Bar */}
             <div className="w-full bg-farmly-cream py-2 px-3 sm:px-4 flex items-center justify-center gap-2 text-[10px] sm:text-xs font-semibold tracking-wider text-neutral-900 uppercase">
                 <span className="w-2 h-2 rounded-full bg-farmly-dot shrink-0"></span>
@@ -74,56 +87,58 @@ export default function Header({ cartCount = 0 }: HeaderProps) {
             </div>
 
             {/* Main Header Row */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-3.5 pt-2 flex items-center justify-between gap-3">
+            <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
                 {/* 1. Logo Brand */}
                 <Link
                     to="/"
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="flex items-center gap-2.5 shrink-0 group min-h-11"
+                    className="group flex shrink-0 items-center gap-2.5"
                 >
-                    <svg
-                        viewBox="0 0 32 32"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="w-7 h-7 sm:w-8 sm:h-8 text-farmly-dark transition-transform duration-200 group-hover:scale-105"
-                    >
-                        <path
-                            d="M26 6C16 6 7 11.5 7 21C7 23.5 8 25.5 9.5 26.5C11 27.5 13 27 15.5 26.5C23 25 26 17 26 6Z"
-                            stroke="currentColor"
-                            strokeWidth="2.4"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        />
-                        <path
-                            d="M7 26C11.5 21 16 17 22 13"
-                            stroke="currentColor"
-                            strokeWidth="2.4"
-                            strokeLinecap="round"
-                        />
-                    </svg>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#DDF2E2] text-[#1B4332]">
+                        <svg
+                            viewBox="0 0 32 32"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-6 w-6 transition-transform duration-200 group-hover:scale-105"
+                        >
+                            <path
+                                d="M26 6C16 6 7 11.5 7 21C7 23.5 8 25.5 9.5 26.5C11 27.5 13 27 15.5 26.5C23 25 26 17 26 6Z"
+                                stroke="currentColor"
+                                strokeWidth="2.4"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            />
+                            <path
+                                d="M7 26C11.5 21 16 17 22 13"
+                                stroke="currentColor"
+                                strokeWidth="2.4"
+                                strokeLinecap="round"
+                            />
+                        </svg>
+                    </div>
 
                     <div className="flex flex-col leading-none">
-                        <span className="text-lg sm:text-xl font-extrabold tracking-tight text-farmly-dark">
+                        <span className="text-lg font-extrabold tracking-tight text-[#1B4332] sm:text-xl">
                             FARMLY
                         </span>
-                        <span className="text-[8px] sm:text-[9px] font-bold tracking-[0.14em] text-neutral-600 mt-0.5 uppercase">
+                        <span className="mt-0.5 text-[8px] font-bold tracking-[0.14em] text-gray-600 uppercase sm:text-[9px]">
                             SINGLE-ORIGIN PRODUCE
                         </span>
                     </div>
                 </Link>
 
-                {/* 2. Pill Navigation Menu */}
-                <nav className="hidden lg:inline-flex items-center bg-white border border-farmly-soft rounded-full p-1 shadow-xs overflow-hidden shrink-0">
-                    {navItems.map((item) => (
+                {/* 2. Pill Navigation Menu (Desktop) */}
+                <nav className="hidden shrink-0 items-center overflow-hidden rounded-full border border-emerald-900/10 bg-white p-1 shadow-2xs lg:inline-flex">
+                    {NAV_ITEMS.map((item) => (
                         <NavLink
                             key={item.path}
                             to={item.path}
-                            end={item.exact}
+                            end={item.path === '/'}
                             className={({ isActive }) => {
-                                const active = checkNavActive(item.path, isActive);
-                                return `inline-flex items-center justify-center min-h-9.5 lg:px-4 xl:px-5 py-2 rounded-full lg:text-[13px] xl:text-sm font-semibold leading-none transition-all duration-200 whitespace-nowrap select-none ${active
-                                    ? "bg-farmly-dark text-white shadow-xs"
-                                    : "text-neutral-800 hover:text-farmly-dark hover:bg-neutral-50"
+                                const active = checkItemActive(item.path, isActive);
+                                return `inline-flex min-h-[38px] items-center justify-center rounded-full px-3.5 text-[13px] leading-none font-semibold whitespace-nowrap transition-all duration-200 select-none xl:px-4 xl:text-sm ${active
+                                    ? 'bg-[#1E462D] text-white shadow-2xs'
+                                    : 'text-gray-700 hover:bg-[#F3F8F3] hover:text-[#1B4332]'
                                     }`;
                             }}
                         >
@@ -132,98 +147,96 @@ export default function Header({ cartCount = 0 }: HeaderProps) {
                     ))}
                 </nav>
 
-                {/* 3. Right Actions: Search, Cart, Profile, Mobile Menu */}
-                <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                {/* 3. Right Actions: Search, Cart, Auth/Profile, Mobile Menu */}
+                <div className="flex shrink-0 items-center gap-2">
                     {/* Desktop Search Input */}
                     <form
                         onSubmit={handleSearch}
-                        className="hidden md:flex items-center bg-white border border-farmly-soft rounded-full px-3.5 h-11 md:w-48 lg:w-44 xl:w-64 focus-within:ring-2 focus-within:ring-farmly-dark/20 transition"
+                        className="hidden items-center rounded-full border border-emerald-900/15 bg-white px-3.5 py-1.5 transition focus-within:border-[#1E462D] md:flex md:w-48 lg:w-40 xl:w-56"
                     >
-                        <Search className="w-4 h-4 text-neutral-500 mr-2 shrink-0" />
+                        <Search className="mr-2 h-4 w-4 shrink-0 text-gray-400" />
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Tìm rau củ, trái cây..."
-                            className="w-full bg-transparent text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none"
+                            maxLength={100}
+                            placeholder="Tìm rau củ, mã QR..."
+                            className="h-8 w-full bg-transparent text-sm text-gray-800 placeholder-gray-400 focus:outline-none"
                         />
-                        {searchQuery && (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setSearchQuery("");
-                                    if (location.pathname === "/products") navigate("/products");
-                                }}
-                                aria-label="Xóa từ khóa"
-                                className="text-neutral-400 hover:text-neutral-600 ml-1"
-                            >
-                                <X className="w-3.5 h-3.5" />
-                            </button>
-                        )}
                     </form>
 
-                    {/* Mobile Search Toggle (>= 44x44px theo NFR-U03) */}
+                    {/* Mobile Search Toggle (≥ 44x44px) */}
                     <button
                         type="button"
                         onClick={() => {
-                            setIsMobileSearchOpen(!isMobileSearchOpen);
+                            setIsMobileSearchOpen((prev) => !prev);
                             setIsMobileMenuOpen(false);
                         }}
                         aria-label="Mở tìm kiếm"
-                        className="md:hidden w-11 h-11 rounded-full bg-white border border-farmly-soft flex items-center justify-center text-farmly-dark hover:bg-neutral-50 transition"
+                        className="flex h-11 w-11 items-center justify-center rounded-full border border-emerald-900/15 bg-white text-[#1B4332] transition hover:bg-emerald-50 md:hidden"
                     >
-                        <Search className="w-5 h-5 stroke-2" />
+                        <Search className="h-5 w-5" />
                     </button>
 
-                    {/* Cart Button with Badge (>= 44x44px theo NFR-U03) */}
+                    {/* Cart Button with Dynamic Badge (≥ 44x44px) */}
                     <Link
                         to="/cart"
                         aria-label="Giỏ hàng"
-                        className="relative w-11 h-11 rounded-full bg-white border border-farmly-soft flex items-center justify-center text-farmly-dark hover:bg-neutral-50 transition"
+                        className="relative flex h-11 w-11 items-center justify-center rounded-full border border-emerald-900/15 bg-white text-[#1B4332] transition hover:bg-emerald-50"
                     >
-                        <ShoppingBasket className="w-5 h-5 stroke-2" />
+                        <ShoppingBasket className="h-5 w-5" />
                         {cartCount > 0 && (
-                            <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-farmly-badge text-white text-[11px] font-bold flex items-center justify-center shadow-xs">
-                                {cartCount > 99 ? "99+" : cartCount}
+                            <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white shadow-2xs">
+                                {cartCount}
                             </span>
                         )}
                     </Link>
 
-                    {/* User Profile / Login Button */}
-                    {isAuthenticated ? (
-                        <Link
-                            to="/profile"
-                            aria-label="Tài khoản cá nhân"
-                            className="w-11 h-11 rounded-full bg-farmly-dark text-white flex items-center justify-center hover:opacity-90 transition shadow-xs"
-                        >
-                            <User className="w-5 h-5 stroke-2" />
-                        </Link>
+                    {/* User Account / Login Button */}
+                    {isAuthenticated && user ? (
+                        <div className="hidden items-center gap-1.5 sm:flex">
+                            <Link
+                                to={profileDestination}
+                                aria-label="Tài khoản cá nhân"
+                                className="inline-flex h-11 items-center gap-2 rounded-full bg-[#1E462D] px-3.5 text-xs font-bold text-white shadow-2xs transition hover:bg-[#163622]"
+                            >
+                                <User className="h-4 w-4 shrink-0" />
+
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={handleLogout}
+                                title="Đăng xuất"
+                                aria-label="Đăng xuất"
+                                className="flex h-11 w-11 items-center justify-center rounded-full border border-emerald-900/15 bg-white text-gray-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                            >
+                                <LogOut className="h-4 w-4" />
+                            </button>
+                        </div>
                     ) : (
                         <Link
                             to="/login"
-                            aria-label="Đăng nhập"
-                            className="inline-flex items-center justify-center gap-1.5 h-11 px-3.5 rounded-full bg-farmly-dark text-white text-xs sm:text-sm font-bold hover:opacity-90 transition shadow-xs"
+                            className="hidden h-11 items-center justify-center rounded-full bg-[#1E462D] px-4 text-xs font-bold text-white shadow-2xs transition hover:bg-[#163622] sm:inline-flex sm:text-sm"
                         >
-                            <LogIn className="w-4 h-4 shrink-0" />
-                            <span className="hidden sm:inline">Đăng nhập</span>
+                            Đăng nhập
                         </Link>
                     )}
 
-                    {/* Mobile Hamburger Menu (>= 44x44px theo NFR-U03) */}
+                    {/* Mobile Hamburger Menu (≥ 44x44px) */}
                     <button
                         type="button"
                         onClick={() => {
-                            setIsMobileMenuOpen(!isMobileMenuOpen);
+                            setIsMobileMenuOpen((prev) => !prev);
                             setIsMobileSearchOpen(false);
                         }}
                         aria-label="Mở menu điều hướng"
                         aria-expanded={isMobileMenuOpen}
-                        className="lg:hidden w-11 h-11 rounded-full bg-white border border-farmly-soft flex items-center justify-center text-farmly-dark hover:bg-neutral-50 transition"
+                        className="flex h-11 w-11 items-center justify-center rounded-full border border-emerald-900/15 bg-white text-[#1B4332] transition hover:bg-emerald-50 lg:hidden"
                     >
                         {isMobileMenuOpen ? (
-                            <X className="w-5 h-5 stroke-2" />
+                            <X className="h-5 w-5" />
                         ) : (
-                            <Menu className="w-5 h-5 stroke-2" />
+                            <Menu className="h-5 w-5" />
                         )}
                     </button>
                 </div>
@@ -231,19 +244,20 @@ export default function Header({ cartCount = 0 }: HeaderProps) {
 
             {/* Mobile Search Bar */}
             {isMobileSearchOpen && (
-                <div className="md:hidden px-3 pb-3 border-t border-farmly-soft pt-2.5 bg-farmly-mint">
+                <div className="border-t border-emerald-900/10 bg-[#F3F8F3] px-4 py-3 md:hidden">
                     <form
                         onSubmit={handleSearch}
-                        className="flex items-center bg-white border border-farmly-soft rounded-full px-3.5 h-11"
+                        className="flex items-center rounded-full border border-emerald-900/15 bg-white px-3.5"
                     >
-                        <Search className="w-4 h-4 text-neutral-500 mr-2 shrink-0" />
+                        <Search className="mr-2 h-4 w-4 shrink-0 text-gray-400" />
                         <input
                             type="text"
                             autoFocus
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Tìm kiếm rau củ, trái cây, mã lô..."
-                            className="w-full bg-transparent text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none"
+                            maxLength={100}
+                            placeholder="Tìm kiếm rau củ, trái cây, mã QR..."
+                            className="h-11 w-full bg-transparent text-sm text-gray-800 placeholder-gray-400 focus:outline-none"
                         />
                     </form>
                 </div>
@@ -251,28 +265,76 @@ export default function Header({ cartCount = 0 }: HeaderProps) {
 
             {/* Mobile Navigation Drawer */}
             {isMobileMenuOpen && (
-                <div className="lg:hidden bg-white border-t border-farmly-soft px-4 py-4 shadow-md">
-                    <nav className="flex flex-col space-y-1.5">
-                        {navItems.map((item) => (
+                <div className="border-t border-emerald-900/10 bg-white px-4 py-4 shadow-md lg:hidden">
+                    <nav className="flex flex-col space-y-1">
+                        {NAV_ITEMS.map((item) => (
                             <NavLink
                                 key={item.path}
                                 to={item.path}
-                                end={item.exact}
+                                end={item.path === '/'}
                                 onClick={() => setIsMobileMenuOpen(false)}
                                 className={({ isActive }) => {
-                                    const active = checkNavActive(item.path, isActive);
-                                    return `min-h-11 flex items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${active
-                                        ? "bg-farmly-dark text-white"
-                                        : "text-neutral-800 hover:bg-farmly-mint hover:text-farmly-dark"
+                                    const active = checkItemActive(item.path, isActive);
+                                    return `flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors ${active
+                                        ? 'bg-[#1E462D] text-white'
+                                        : 'text-gray-800 hover:bg-[#F3F8F3] hover:text-[#1B4332]'
                                         }`;
                                 }}
                             >
-                                {item.label}
+                                {item.path.includes('subscriptions') && (
+                                    <CalendarSync className="h-4 w-4 shrink-0" />
+                                )}
+                                {item.path.includes('trace') && (
+                                    <QrCode className="h-4 w-4 shrink-0" />
+                                )}
+                                <span>{item.label}</span>
                             </NavLink>
                         ))}
                     </nav>
+
+                    {/* Khối Tài khoản trên Mobile Drawer */}
+                    <div className="mt-3 border-t border-gray-100 pt-3">
+                        {isAuthenticated && user ? (
+                            <div className="flex items-center justify-between gap-2">
+                                <Link
+                                    to={profileDestination}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className="flex min-h-[44px] flex-1 items-center gap-2 rounded-xl bg-[#F3F8F3] px-3.5 text-sm font-bold text-[#1B4332]"
+                                >
+                                    <Package className="h-4 w-4 shrink-0" />
+                                    <span className="truncate">{user.full_name}</span>
+                                </Link>
+                                <button
+                                    type="button"
+                                    onClick={handleLogout}
+                                    className="inline-flex h-11 items-center justify-center rounded-xl border border-red-200 px-3.5 text-xs font-bold text-red-600 hover:bg-red-50"
+                                >
+                                    Đăng xuất
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                                <Link
+                                    to="/login"
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className="inline-flex h-11 items-center justify-center rounded-xl bg-[#1E462D] text-sm font-bold text-white"
+                                >
+                                    Đăng nhập
+                                </Link>
+                                <Link
+                                    to="/register"
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-900/20 text-sm font-bold text-[#1B4332]"
+                                >
+                                    Đăng ký
+                                </Link>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </header>
     );
 }
+
+export default Header;

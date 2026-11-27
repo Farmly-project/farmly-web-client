@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
 export class ApiError extends Error {
     status: number;
@@ -29,7 +29,9 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
     }
 
     // Lấy JWT Access Token từ localStorage (do Supabase Auth cấp)
-    const token = localStorage.getItem('access_token');
+    const token =
+        localStorage.getItem('access_token') ||
+        sessionStorage.getItem('access_token');
 
     const response = await fetch(url.toString(), {
         ...restOptions,

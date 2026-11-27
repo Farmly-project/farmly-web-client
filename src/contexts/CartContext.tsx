@@ -7,20 +7,35 @@ import {
     type ReactNode,
 } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import {
+    orderService,
+    clearGuestToken,
+} from '../services/orderService';
 
 export interface CartItem {
-    id: string;
+    id: string; // cart_item_id từ bảng cart_items
     product_id: number;
     product_name: string;
     unit: string;
     unit_price: number;
-    original_price?: number;     // Giá gốc trước giảm (nếu có ưu đãi lô cận hạn)
-    is_near_expiry?: boolean;    // Nhãn lô cận hạn giảm giá
-    is_available?: boolean;      // false nếu sản phẩm vừa ngừng bán / hết sạch tồn
-    category_note?: string;      // VD: "Bảo quản lạnh 4°C • VietGAP"
+    original_price?: number | null;
     quantity: number;
-    image_url?: string;
+    image_url?: string | null;
     available_stock?: number;
+    is_available?: boolean;
+    is_near_expiry_deal?: boolean;
+}
+
+export interface AddToCartPayload {
+    product_id: number;
+    product_name?: string;
+    unit?: string;
+    unit_price?: number;
+    original_price?: number | null;
+    image_url?: string | null;
+    available_stock?: number;
+    is_available?: boolean;
+    is_near_expiry_deal?: boolean;
 }
 
 export interface CartContextType {
@@ -28,208 +43,182 @@ export interface CartContextType {
     totalItems: number;
     subTotal: number;
     isLoading: boolean;
-    addToCart: (
-        product: Omit<CartItem, 'id' | 'quantity'>,
-        quantity?: number
-    ) => Promise<void>;
+    error: string | null;
+    addToCart: (product: AddToCartPayload, quantity?: number) => Promise<void>;
     updateQuantity: (itemId: string, quantity: number) => Promise<void>;
     removeFromCart: (itemId: string) => Promise<void>;
+    removeManyFromCart: (itemIds: string[]) => Promise<void>;
     clearCart: () => void;
     refreshCart: () => Promise<void>;
 }
 
 export const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
-const GUEST_CART_KEY = 'farmly_guest_cart';
+// Ánh xạ dữ liệu trả về từ API #34 (GET /api/v1/cart)
+function mapApiCartItems(rawPayload: unknown): CartItem[] {
+    const root = (rawPayload as { data?: unknown })?.data ?? rawPayload;
+    const list = Array.isArray(root)
+        ? root
+        : Array.isArray((root as { items?: unknown[] })?.items)
+            ? (root as { items: unknown[] }).items
+            : [];
 
-function readGuestCart(): CartItem[] {
-    try {
-        const raw = localStorage.getItem(GUEST_CART_KEY);
-        return raw ? (JSON.parse(raw) as CartItem[]) : [];
-    } catch {
-        return [];
-    }
-}
+    return list.map((row: any) => {
+        const product = row.product ?? {};
+        const fefoBatch = product.fefo_batch ?? row.fefo_batch ?? null;
 
-function writeGuestCart(items: CartItem[]) {
-    localStorage.setItem(GUEST_CART_KEY, JSON.stringify(items));
+        const unitPrice = Number(
+            row.unit_price ??
+            fefoBatch?.flash_sale_price ??
+            product.sale_price ??
+            product.base_price ??
+            0
+        );
+        const basePrice = Number(
+            row.original_price ?? product.base_price ?? unitPrice
+        );
+
+        return {
+            id: String(row.id ?? row.cart_item_id),
+            product_id: Number(row.product_id ?? product.id),
+            product_name: String(row.product_name ?? product.name ?? 'Nông sản Farmly'),
+            unit: String(row.unit ?? product.unit ?? 'phần'),
+            unit_price: unitPrice,
+            original_price: basePrice > unitPrice ? basePrice : null,
+            quantity: Number(row.quantity ?? 1),
+            image_url:
+                row.image_url ??
+                row.primary_image_url ??
+                row.primary_image ??
+                product.primary_image_url ??
+                product.primary_image ??
+                null,
+            available_stock:
+                row.available_stock !== undefined
+                    ? Number(row.available_stock)
+                    : row.available_quantity !== undefined
+                        ? Number(row.available_quantity)
+                        : product.available_stock !== undefined
+                            ? Number(product.available_stock)
+                            : product.available_quantity !== undefined
+                                ? Number(product.available_quantity)
+                                : undefined,
+            is_available:
+                row.is_available !== undefined
+                    ? Boolean(row.is_available)
+                    : product.is_active !== undefined
+                        ? Boolean(product.is_active)
+                        : true,
+            is_near_expiry_deal: Boolean(
+                row.is_near_expiry_deal ??
+                product.is_near_expiry_deal ??
+                basePrice > unitPrice
+            ),
+        };
+    });
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
-    const { isAuthenticated, token, user } = useAuth();
-    const isCustomer = isAuthenticated && user?.role === 'CUSTOMER';
+    const { isAuthenticated, user } = useAuth();
+    const isCustomer = isAuthenticated && user?.role.toUpperCase() === 'CUSTOMER';
 
-    const [items, setItems] = useState<CartItem[]>(() => readGuestCart());
-    const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [items, setItems] = useState<CartItem[]>([]);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [error, setError] = useState<string | null>(null);
 
-    // Tải giỏ hàng từ Backend cho CUSTOMER (API #34: GET /api/v1/cart)
-    const fetchServerCart = useCallback(async () => {
-        if (!token) return;
+    // API #34: GET /api/v1/cart
+    const refreshCart = useCallback(async () => {
         setIsLoading(true);
+        setError(null);
         try {
-            const res = await fetch(`${API_URL}/cart`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (res.ok) {
-                const payload = await res.json();
-                const serverItems = (payload.data?.items || payload.items || []) as CartItem[];
-                setItems(serverItems);
-            }
-        } catch {
-            // Giữ danh sách hiện tại nếu mất kết nối tạm thời
+            const res = await orderService.getCart(isCustomer);
+            setItems(mapApiCartItems(res));
+        } catch (err) {
+            setError(
+                err instanceof Error ? err.message : 'Không thể tải dữ liệu giỏ hàng.'
+            );
         } finally {
             setIsLoading(false);
         }
-    }, [token]);
+    }, [isCustomer]);
 
-    // Gộp giỏ tạm của Khách vãn lai vào tài khoản ngay khi đăng nhập (Bảng 2.2)
+    // Đồng bộ giỏ vãn lai (nếu có guest_token) vào tài khoản khi đăng nhập và tải giỏ từ API
     useEffect(() => {
-        if (!isCustomer || !token) {
-            setItems(readGuestCart());
-            return;
+        let isMounted = true;
+
+        async function initCart() {
+            const hadGuestToken = Boolean(localStorage.getItem('farmly_guest_token'));
+
+            if (isCustomer && hadGuestToken) {
+                try {
+                    const guestRes = await orderService.getCart(false);
+                    const guestItems = mapApiCartItems(guestRes);
+                    for (const item of guestItems) {
+                        await orderService.addCartItem(item.product_id, item.quantity, true);
+                    }
+                    clearGuestToken();
+                } catch {
+                    // Bỏ qua nếu giỏ tạm trống hoặc đã gộp trước đó
+                }
+            }
+
+            if (isMounted) {
+                await refreshCart();
+            }
         }
 
-        const syncAndLoadCart = async () => {
-            const guestItems = readGuestCart();
-            if (guestItems.length > 0) {
-                for (const item of guestItems) {
-                    await fetch(`${API_URL}/cart/items`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Authorization: `Bearer ${token}`,
-                        },
-                        body: JSON.stringify({
-                            product_id: item.product_id,
-                            quantity: item.quantity,
-                        }),
-                    }).catch(() => { });
-                }
-                localStorage.removeItem(GUEST_CART_KEY);
-            }
-            await fetchServerCart();
+        initCart();
+        return () => {
+            isMounted = false;
         };
+    }, [isCustomer, refreshCart]);
 
-        syncAndLoadCart();
-    }, [isCustomer, token, fetchServerCart]);
-
-    // Thêm sản phẩm vào giỏ (API #35: POST /api/v1/cart/items)
+    // API #35: POST /api/v1/cart/items
     const addToCart = useCallback(
-        async (product: Omit<CartItem, 'id' | 'quantity'>, quantity = 1) => {
+        async (product: AddToCartPayload, quantity = 1) => {
             if (quantity <= 0) return;
-
-            if (!isCustomer || !token) {
-                setItems((prev) => {
-                    const existing = prev.find((i) => i.product_id === product.product_id);
-                    const next = existing
-                        ? prev.map((i) =>
-                            i.product_id === product.product_id
-                                ? { ...i, quantity: i.quantity + quantity }
-                                : i
-                        )
-                        : [
-                            ...prev,
-                            {
-                                ...product,
-                                id: `guest-${product.product_id}`,
-                                quantity,
-                            },
-                        ];
-                    writeGuestCart(next);
-                    return next;
-                });
-                return;
-            }
-
-            const res = await fetch(`${API_URL}/cart/items`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    product_id: product.product_id,
-                    quantity,
-                }),
-            });
-            if (res.ok) {
-                await fetchServerCart();
-            }
+            await orderService.addCartItem(product.product_id, quantity, isCustomer);
+            await refreshCart();
         },
-        [isCustomer, token, fetchServerCart]
+        [isCustomer, refreshCart]
     );
 
-    // Cập nhật số lượng (API #36: PUT /api/v1/cart/items/:itemId)
+    // API #36: PUT /api/v1/cart/items/:itemId
     const updateQuantity = useCallback(
         async (itemId: string, quantity: number) => {
             if (quantity <= 0) {
-                if (!isCustomer || !token) {
-                    setItems((prev) => {
-                        const next = prev.filter((i) => i.id !== itemId);
-                        writeGuestCart(next);
-                        return next;
-                    });
-                    return;
-                }
-                await fetch(`${API_URL}/cart/items/${itemId}`, {
-                    method: 'DELETE',
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                await fetchServerCart();
-                return;
+                await orderService.deleteCartItem(itemId, isCustomer);
+            } else {
+                await orderService.updateCartItem(itemId, quantity, isCustomer);
             }
-
-            if (!isCustomer || !token) {
-                setItems((prev) => {
-                    const next = prev.map((i) => (i.id === itemId ? { ...i, quantity } : i));
-                    writeGuestCart(next);
-                    return next;
-                });
-                return;
-            }
-
-            const res = await fetch(`${API_URL}/cart/items/${itemId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ quantity }),
-            });
-            if (res.ok) {
-                await fetchServerCart();
-            }
+            await refreshCart();
         },
-        [isCustomer, token, fetchServerCart]
+        [isCustomer, refreshCart]
     );
 
-    // Xóa sản phẩm khỏi giỏ (API #37: DELETE /api/v1/cart/items/:itemId)
+    // API #37: DELETE /api/v1/cart/items/:itemId
     const removeFromCart = useCallback(
         async (itemId: string) => {
-            if (!isCustomer || !token) {
-                setItems((prev) => {
-                    const next = prev.filter((i) => i.id !== itemId);
-                    writeGuestCart(next);
-                    return next;
-                });
-                return;
-            }
-
-            const res = await fetch(`${API_URL}/cart/items/${itemId}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (res.ok) {
-                await fetchServerCart();
-            }
+            await orderService.deleteCartItem(itemId, isCustomer);
+            await refreshCart();
         },
-        [isCustomer, token, fetchServerCart]
+        [isCustomer, refreshCart]
+    );
+
+    const removeManyFromCart = useCallback(
+        async (itemIds: string[]) => {
+            if (itemIds.length === 0) return;
+            await Promise.all(
+                itemIds.map((id) => orderService.deleteCartItem(id, isCustomer))
+            );
+            await refreshCart();
+        },
+        [isCustomer, refreshCart]
     );
 
     const clearCart = useCallback(() => {
         setItems([]);
-        localStorage.removeItem(GUEST_CART_KEY);
+        clearGuestToken();
     }, []);
 
     const totalItems = useMemo(
@@ -249,11 +238,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
                 totalItems,
                 subTotal,
                 isLoading,
+                error,
                 addToCart,
                 updateQuantity,
                 removeFromCart,
+                removeManyFromCart,
                 clearCart,
-                refreshCart: fetchServerCart,
+                refreshCart,
             }}
         >
             {children}

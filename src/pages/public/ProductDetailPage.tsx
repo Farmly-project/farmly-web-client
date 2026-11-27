@@ -7,12 +7,14 @@ import type {
     FarmingLogItem,
     ProductReviewItem,
 } from '../../types/product.types';
-import { ProductCard } from '../../components/product/ProductCard';
-import { ProductGallery } from '../../components/product/ProductGallery';
-import { FefoBatchCard } from '../../components/product/FefoBatchCard';
-import { ProductPurchaseBox } from '../../components/product/ProductPurchaseBox';
-import { FarmingLogTimeline } from '../../components/product/FarmingLogTimeline';
-import { ProductReviewSection } from '../../components/product/ProductReviewSection';
+import {
+    ProductCard,
+    ProductGallery,
+    FefoBatchCard,
+    ProductPurchaseBox,
+    FarmingLogTimeline,
+    ProductReviewSection,
+} from '../../components/product';
 import { productService } from '../../services/productService';
 import { ApiError } from '../../services/apiClient';
 import { formatCurrency } from '../../utils/formatters';
@@ -48,15 +50,21 @@ export function ProductDetailPage() {
                         ? productService.getBatchFarmingLogs(detail.fefo_batch.id).catch(() => [])
                         : Promise.resolve(detail.farming_logs || []),
                     productService.getProductReviews(detail.id).catch(() => detail.reviews || []),
-                    productService
-                        .getRelatedProducts(detail.category.id, 4)
-                        .catch(() => detail.related_products || []),
+                    detail.category?.id
+                        ? productService
+                            .getRelatedProducts(detail.category.id, 4)
+                            .catch(() => detail.related_products || [])
+                        : Promise.resolve(detail.related_products || []),
                 ]);
 
                 if (!isMounted) return;
-                setFarmingLogs(logsData);
-                setReviews(reviewsData);
-                setRelatedProducts(relatedData.filter((item) => item.id !== detail.id).slice(0, 4));
+                setFarmingLogs(Array.isArray(logsData) ? logsData : []);
+                setReviews(Array.isArray(reviewsData) ? reviewsData : []);
+
+                const rawRelated = Array.isArray(relatedData)
+                    ? relatedData
+                    : (relatedData as unknown as { items?: ProductCardItem[] })?.items || [];
+                setRelatedProducts(rawRelated.filter((item) => item.id !== detail.id).slice(0, 4));
             } catch (err) {
                 if (!isMounted) return;
                 setErrorMsg(
@@ -120,7 +128,7 @@ export function ProductDetailPage() {
         return (
             <div className="mx-auto max-w-6xl px-4 py-10 animate-pulse">
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-                    <div className="lg:col-span-6 aspect-4/3 rounded-2xl bg-gray-200" />
+                    <div className="lg:col-span-6 aspect-[4/3] rounded-2xl bg-gray-200" />
                     <div className="lg:col-span-6 space-y-4">
                         <div className="h-8 w-2/3 rounded bg-gray-200" />
                         <div className="h-44 rounded-2xl bg-gray-200" />
@@ -145,14 +153,64 @@ export function ProductDetailPage() {
         );
     }
 
-    const isOutOfStock = product.available_stock <= 0 || !product.fefo_batch;
-    const activePrice = product.fefo_batch?.flash_sale_price ?? product.base_price;
+    // Đồng bộ trường tồn kho từ DB thực tế (available_quantity) hoặc available_stock
+    const availableStock = Number(product.available_quantity ?? product.available_stock ?? 0);
+    const isOutOfStock = availableStock <= 0;
+
+    // Đồng bộ giá Flash Sale từ lô FEFO hoặc trường phẳng trên product
+    const flashPrice =
+        product.fefo_batch?.flash_sale_price ??
+        (product.has_flash_sale ? product.flash_sale_price : null);
+    const activePrice = flashPrice !== null && flashPrice < product.base_price ? flashPrice : product.base_price;
+
     const discountPercent =
-        product.fefo_batch?.flash_sale_price && product.base_price > product.fefo_batch.flash_sale_price
-            ? Math.round(
-                ((product.base_price - product.fefo_batch.flash_sale_price) / product.base_price) * 100
-            )
+        activePrice < product.base_price
+            ? Math.round(((product.base_price - activePrice) / product.base_price) * 100)
             : 0;
+
+    // Chuẩn hóa danh sách ảnh cho ProductGallery (hỗ trợ cả mảng images và primary_image)
+    const galleryImages =
+        Array.isArray(product.images) && product.images.length > 0
+            ? product.images
+            : product.primary_image
+                ? [
+                    {
+                        id: 1,
+                        image_url: product.primary_image,
+                        caption: 'Ảnh sản phẩm',
+                        is_primary: true,
+                        display_order: 1,
+                    },
+                ]
+                : [];
+
+    // Chuẩn hóa chứng nhận thành mảng chuỗi tên chứng nhận
+    const certificationsList: string[] = Array.isArray(product.certifications)
+        ? product.certifications.map((c) => (typeof c === 'string' ? c : c.cert_name))
+        : [];
+
+    // Nếu Backend chưa trả object fefo_batch đầy đủ nhưng có nearest_exp_date thì tự dựng lô tóm tắt
+    const resolvedFefoBatch =
+        product.fefo_batch ??
+        (product.nearest_exp_date
+            ? {
+                id: 0,
+                batch_code: `LOT-${product.id}-${product.nearest_exp_date.replace(/-/g, '')}`,
+                harvest_date: product.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+                exp_date: product.nearest_exp_date,
+                days_until_expiry: Math.max(
+                    0,
+                    Math.ceil(
+                        (new Date(product.nearest_exp_date).getTime() - new Date().setHours(0, 0, 0, 0)) /
+                        (1000 * 60 * 60 * 24)
+                    )
+                ),
+                current_quantity: availableStock,
+                qr_code: `LOT-${product.id}`,
+                flash_sale_price: flashPrice ?? null,
+                flash_sale_ends_at: null,
+            }
+            : null);
 
     return (
         <div className="min-h-screen bg-[#F8FAF8] text-gray-900 pb-24 md:pb-12">
@@ -160,9 +218,9 @@ export function ProductDetailPage() {
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
                     <div className="lg:col-span-6">
                         <ProductGallery
-                            images={product.images}
+                            images={galleryImages}
                             productName={product.name}
-                            certifications={product.certifications}
+                            certifications={certificationsList}
                         />
                     </div>
 
@@ -180,6 +238,10 @@ export function ProductDetailPage() {
                         <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
                             {product.name}
                         </h1>
+
+                        {product.short_description && (
+                            <p className="text-sm text-gray-600">{product.short_description}</p>
+                        )}
 
                         <div className="flex flex-wrap items-baseline gap-2.5">
                             <span className="text-3xl font-extrabold text-[#1B5E20]">
@@ -199,8 +261,8 @@ export function ProductDetailPage() {
                         </div>
 
                         <FefoBatchCard
-                            batch={product.fefo_batch}
-                            availableStock={product.available_stock}
+                            batch={resolvedFefoBatch}
+                            availableStock={availableStock}
                             unit={product.unit}
                         />
 
@@ -208,8 +270,8 @@ export function ProductDetailPage() {
                             productId={product.id}
                             unit={product.unit}
                             activePrice={activePrice}
-                            availableStock={product.available_stock}
-                            allowSubscription={product.category?.allow_subscription}
+                            availableStock={availableStock}
+                            allowSubscription={Boolean(product.category?.allow_subscription)}
                             isOutOfStock={isOutOfStock}
                             isSubmitting={isSubmitting}
                             onAddToCart={handleAddToCart}
@@ -228,8 +290,8 @@ export function ProductDetailPage() {
                 </div>
 
                 <FarmingLogTimeline
-                    batchCode={product.fefo_batch?.batch_code}
-                    description={product.description}
+                    batchCode={resolvedFefoBatch?.batch_code}
+                    description={product.description || product.short_description || ''}
                     logs={farmingLogs}
                 />
 
@@ -241,14 +303,17 @@ export function ProductDetailPage() {
                                 <ProductCard
                                     key={item.id}
                                     product={item}
-                                    onAddToCart={(prodId) => handleAddToCart(prodId, 1, false)}
+                                    onAddToCart={(prodId: number) => handleAddToCart(prodId, 1, false)}
                                 />
                             ))}
                         </div>
                     </section>
                 )}
 
-                <ProductReviewSection ratingSummary={product.rating_summary} reviews={reviews} />
+                <ProductReviewSection
+                    ratingSummary={product.rating_summary ?? { average: 5.0, count: reviews.length }}
+                    reviews={reviews}
+                />
             </div>
         </div>
     );
