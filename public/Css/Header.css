@@ -1,44 +1,46 @@
+/* src/index.css */
 @import "tailwindcss";
 
 :root {
-    --farmly-bg-cream: #FDF0D5;
-    /* Nền vàng kem ấm của Top Announcement Bar */
-    --farmly-bg-mint: #E6F8E7;
-    /* Nền xanh bạc hà của Header chính & Footer */
-    --farmly-green-dark: #1E4620;
-    /* Xanh lá đậm (Logo, nút active, icon) */
-    --farmly-green-dot: #2E6F24;
-    /* Chấm tròn xanh lá */
-    --farmly-brown-badge: #5C3317;
-    /* Nền nâu đậm badge giỏ hàng */
-    --farmly-border-soft: #C7DEC8;
-    /* Viền nhạt thanh menu, ô tìm kiếm */
+  --farmly-bg-cream: #fdf0d5; /* Nền vàng kem ấm (Announcement / Alert Banner) */
+  --farmly-bg-mint: #e6f8e7; /* Nền xanh bạc hà (Sidebar / Header / Surface nhấn) */
+  --farmly-green-dark: #1e4620; /* Xanh lá đậm (Logo, nút active, tiêu đề chính, icon) */
+  --farmly-green-hover: #153317; /* Xanh đậm khi hover nút chính */
+  --farmly-green-dot: #2e6f24; /* Chấm tròn xanh lá trạng thái hoạt động */
+  --farmly-brown-badge: #5c3317; /* Nền nâu đậm badge thông báo / cảnh báo tồn */
+  --farmly-border-soft: #c7dec8; /* Viền nhạt card, bảng, thanh menu, input */
 }
 
 .bg-farmly-cream {
-    background-color: var(--farmly-bg-cream);
+  background-color: var(--farmly-bg-cream);
 }
-
 .bg-farmly-mint {
-    background-color: var(--farmly-bg-mint);
+  background-color: var(--farmly-bg-mint);
 }
-
 .bg-farmly-dark {
-    background-color: var(--farmly-green-dark);
+  background-color: var(--farmly-green-dark);
 }
-
+.hover\:bg-farmly-dark-hover:hover {
+  background-color: var(--farmly-green-hover);
+}
 .text-farmly-dark {
-    color: var(--farmly-green-dark);
+  color: var(--farmly-green-dark);
 }
-
+.border-farmly-dark {
+  border-color: var(--farmly-green-dark);
+}
 .bg-farmly-dot {
-    background-color: var(--farmly-green-dot);
+  background-color: var(--farmly-green-dot);
 }
-
+.text-farmly-dot {
+  color: var(--farmly-green-dot);
+}
 .bg-farmly-badge {
-    background-color: var(--farmly-brown-badge);
+  background-color: var(--farmly-brown-badge);
 }
-
+.text-farmly-badge {
+  color: var(--farmly-brown-badge);
+}
 .border-farmly-soft {
-    border-color: var(--farmly-border-soft);
+  border-color: var(--farmly-border-soft);
 }

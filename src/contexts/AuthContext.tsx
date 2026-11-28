@@ -47,7 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             localStorage.getItem('user_info') || sessionStorage.getItem('user_info');
         if (!saved) return null;
         try {
-            return JSON.parse(saved) as AuthUser;
+            const savedUser = JSON.parse(saved) as AuthUser;
+            return {
+                ...savedUser,
+                role: savedUser.role?.trim().toLowerCase() as UserRole,
+            };
         } catch {
             return null;
         }
@@ -92,7 +96,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const payload = await res.json();
                 const meData = (payload.data || payload) as AuthUser;
                 if (isMounted && meData?.id) {
-                    setUser(meData);
+                    setUser({
+                        ...meData,
+                        role: meData.role?.trim().toLowerCase() as UserRole,
+                    });
                     const storage = localStorage.getItem('access_token')
                         ? localStorage
                         : sessionStorage;
@@ -126,11 +133,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (refreshToken) {
                 storage.setItem('refresh_token', refreshToken);
             }
-            storage.setItem('user_info', JSON.stringify(userData));
-            localStorage.setItem('user_role', userData.role);
+            const normalizedUser = {
+                ...userData,
+                role: userData.role?.trim().toLowerCase() as UserRole,
+            };
+            storage.setItem('user_info', JSON.stringify(normalizedUser));
+            localStorage.setItem('user_role', normalizedUser.role);
 
             setToken(accessToken);
-            setUser(userData);
+            setUser({
+                ...userData,
+                role: userData.role?.trim().toLowerCase() as UserRole,
+            });
         },
         [clearAuthStorage]
     );
