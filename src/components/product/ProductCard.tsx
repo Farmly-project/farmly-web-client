@@ -85,7 +85,9 @@ export function ProductCard({
                     {certifications.length > 0 && (
                         <span className="absolute top-2 right-2 inline-flex items-center gap-0.5 rounded-full bg-white/95 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm">
                             <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                            {certifications[0]}
+                            {typeof certifications[0] === 'string'
+                                ? certifications[0]
+                                : certifications[0].cert_name}
                         </span>
                     )}
 

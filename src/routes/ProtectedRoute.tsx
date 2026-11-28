@@ -38,7 +38,7 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
             return <Navigate to="/sales/orders" replace />;
         }
         if (normalizedRole === 'farm_staff') {
-            return <Navigate to="/farm/batches" replace />;
+            return <Navigate to="/dashboard/farm/batches" replace />;
         }
         if (normalizedRole === 'admin') {
             return <Navigate to="/admin/dashboard" replace />;

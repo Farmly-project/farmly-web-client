@@ -35,7 +35,8 @@ export function LoginPage() {
     // Tự động chuyển hướng nếu người dùng đã đăng nhập sẵn
     useEffect(() => {
         if (isAuthenticated && user) {
-            navigate(ROLE_REDIRECT_MAP[user.role] || '/', { replace: true });
+            const role = user.role?.trim().toLowerCase() as UserRole;
+            navigate(ROLE_REDIRECT_MAP[role] || '/', { replace: true });
         }
     }, [isAuthenticated, user, navigate]);
 
@@ -145,7 +146,7 @@ export function LoginPage() {
                 authData.refresh_token
             );
 
-            const role = userData?.role as UserRole;
+            const role = userData?.role?.trim().toLowerCase() as UserRole;
             if (returnTo && role === 'customer') {
                 navigate(returnTo, { replace: true });
             } else {
